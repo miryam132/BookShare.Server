@@ -1,27 +1,36 @@
 # Render deployment review — stage 9
 
-Prepared 2026-10-19. Nothing in this document authorizes resource creation,
-publication, billing or application database changes. No deployment has occurred.
+Updated 2026-10-19. The user authorized private GitHub publication and connection /
+deployment on Render's free tier only. Paid resources, paid upgrades and charges
+are not authorized. No Render deployment has occurred. The local application
+database must remain untouched.
 
 ## Proposed resources and costs
 
 Two separate Git repositories, two separate Render services, one Render Postgres
 database. Proposed region: Frankfurt for API and database. Client is a static site.
-The API blueprint proposes Starter compute; it does not create a database.
+The API blueprint explicitly selects `plan: free`; it does not create a database.
 Select PostgreSQL major version 18 explicitly in the dashboard (Render currently
 offers 13-18; local checks use 18.6). Record the actual managed patch version.
-Database proposal: Basic-256mb, database/user `bookshare_demo`, 1 GB initial storage,
-storage autoscaling disabled, no replicas or HA. Review these values and the
-dashboard's current price before creation; scale only with separate approval.
+Database proposal: Free, database/user `bookshare_demo`, 1 GB storage,
+no replicas, no HA and no paid scaling. Check for an existing free database first:
+Render permits only one active free Postgres database per workspace.
 
-Render's published guidance gives an indicative $13/month for Starter API plus
-Basic-256mb Postgres, before database storage, bandwidth, build overages and taxes.
-This is an estimate, not a spending cap. Confirm the exact selected plans, storage,
-workspace charges, region and usage controls in the dashboard before approval.
-Static hosting has no compute charge but consumes bandwidth/build allowances.
-Free API instances sleep after 15 idle minutes; Free Postgres expires after 30 days,
-has 1 GB storage and no backups. Free API also lacks shell/one-off jobs. This plan
-uses paid API compute for controlled maintenance; no free tier is assumed.
+API compute and Postgres must both be Free; the client is a free static site.
+Confirm the workspace subscription and usage/billing controls before creating any
+resource. Free hosting still has bandwidth/build quotas; accounts with payment
+methods can incur usage overages. Do not add a payment method, enable paid usage,
+upgrade or accept a charge without explicit approval. If the account cannot avoid
+charges or Render requires a paid plan, stop and report the specific requirement.
+
+Free API instances sleep after 15 idle minutes, may take about a minute to wake,
+and share 750 free running hours per workspace/month. Free Postgres expires after
+30 days, has 1 GB storage and no backups. After expiration there is a 14-day upgrade
+grace period before deletion; do not upgrade automatically. Schedule the examiner's
+demo within the active period and retain no irreplaceable data in this database.
+Free API lacks shell, one-off jobs and pre-deploy commands; maintenance is performed
+explicitly from the local machine against the new cloud demo database. Free tier
+is suitable for a temporary course demo, not durable production hosting.
 
 Sources checked 2026-10-19:
 - [Pricing](https://render.com/pricing)
@@ -82,12 +91,13 @@ is required; do not rely on container files. Swagger is Development-only.
 Render owns TLS redirection; `Hosting__BehindTlsProxy=true` disables application
 redirection to avoid proxy loops. Do not expose that HTTP container directly.
 
-## Controlled release and migrations
+## Controlled free-tier release and migrations
 
-1. Review separate repository content and ignores, AutoMapper license terms,
-   exact dashboard estimate and desired database version. No commits or remote
-   publishing have been performed by this stage. Obtain explicit publication /
-   resource / billing approval for the selected repositories, account and plans.
+1. Private GitHub repositories have been published:
+   [server](https://github.com/miryam132/BookShare.Server) and
+   [client](https://github.com/miryam132/BookShare.Client). Review AutoMapper terms.
+   Add/connect Render and authorize its GitHub integration for only these two
+   repositories. Confirm free workspace/resource settings and usage controls.
 2. Create the approved database and service(s). Set secrets privately. First API
    health checks may fail until schema initialization. Never solve this by enabling
    migrations at normal startup. Record the immutable source revision/image.
@@ -95,19 +105,32 @@ redirection to avoid proxy loops. Do not expose that HTTP container directly.
    existing application database, applying migration 2 requires its own controlled
    approval. Stop API writes while changing schema. Set `Maintenance__Database`
    to the exact approved target name.
-4. In a paid Render shell for the same image/environment, run
-   `dotnet BookShare.API.dll --maintenance-migrate`. It exits nonzero on failure
-   without printing connection/provider messages. On a fresh database it applies
-   both migrations. Verify health and migration history before enabling writes.
-   An initial deployment that cannot become healthy can instead use a temporary
-   approved pre-deploy command with this exact command; remove it after that
-   controlled release. Pre-deploy is available on paid compute. Never put the seed
-   command in the start command or permanent pre-deploy command.
-5. Set the four demo passwords privately, enable the seed gate, run
-   `dotnet BookShare.API.dll --maintenance-seed` once and repeat to confirm it exits
-   successfully. Disable/remove seed settings and target confirmation afterward.
-   Save passwords only in a private password manager and give the examiner access
-   through a private channel. They are not returned by the command.
+4. Free services have no shell or pre-deploy command. Before deploying the API,
+   use the already verified local Docker image with the new cloud demo database's
+   external TLS connection and exact `Maintenance__Database`, set privately in
+   process environment. Temporarily allow only the local machine's public IP in
+   database access rules, in addition to the API's approved outbound IP ranges.
+   Run the following local command; values are inherited, never command arguments:
+
+   ```powershell
+   docker run --rm --env ConnectionStrings__BookShare --env Maintenance__Database bookshare-api:stage9 --maintenance-migrate
+   ```
+
+   It applies both migrations to a fresh cloud database and exits nonzero on
+   failure without sensitive provider output. Confirm database identity first;
+   never reuse the local application connection. Verify migration history and
+   health before enabling writes. Do not run tests against this application/demo
+   database; production acceptance writes require the approved demo target.
+5. Set four distinct demo passwords privately, enable the seed gate and run:
+
+   ```powershell
+   docker run --rm --env ConnectionStrings__BookShare --env Maintenance__Database --env DemoSeed__Enabled --env DemoSeed__AdminPassword --env DemoSeed__OwnerPassword --env DemoSeed__Borrower1Password --env DemoSeed__Borrower2Password bookshare-api:stage9 --maintenance-seed
+   ```
+
+   Repeat to confirm idempotence. Remove temporary local IP access, seed settings,
+   maintenance confirmation and local process secrets afterward. Seed passwords
+   need not be placed in the normal API service environment. Retain passwords
+   only in a private password manager and share privately with the examiner.
 6. Deploy the client with the API URL and set the server's exact client origin.
    Recheck both health endpoints, client loading and CORS preflight from that origin.
    Test an unrelated origin is denied. Do not send secret values in screenshots.

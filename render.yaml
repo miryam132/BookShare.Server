@@ -1,9 +1,9 @@
-# Review and approve costs before applying. Separate server repository root.
+# Free tier only, explicitly requested. Check usage/billing controls before applying.
 services:
   - type: web
     name: bookshare-api
     runtime: docker
-    plan: starter
+    plan: free
     region: frankfurt
     autoDeployTrigger: 'off'
     healthCheckPath: /api/health/database

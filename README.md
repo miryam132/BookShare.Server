@@ -5,6 +5,13 @@ lives in its own repository, `../BookShare.Client`. Stage 9 implementation is
 prepared; deployment acceptance is still pending. See [DEPLOYMENT.md](DEPLOYMENT.md)
 for the concrete Render proposal, costs, secrets and controlled release steps.
 
+The user subsequently requested Render Free only. `render.yaml` now explicitly
+uses `plan: free`; paid resources/upgrades are not authorized. Free Postgres
+expires after 30 days, and the API sleeps after 15 idle minutes. Free services
+have no shell/pre-deploy; DEPLOYMENT.md documents controlled local Docker
+maintenance against the separately created cloud demo database. The account
+connection, resource creation and deployed acceptance have not yet occurred.
+
 ## Requirements and architecture
 
 .NET SDK 10.0.400 (latest patch), PostgreSQL 18 (verified locally with 18.6), Git,

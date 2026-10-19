@@ -1,4 +1,28 @@
-﻿# BookShare Server
+# BookShare Server
+
+## Reservation update — 2026-10-20
+
+Borrowers now reserve a physical book before contacting its owner. POST and DELETE
+`/api/books/{id}/reservation` accept the current Version. One competing borrower
+succeeds (200), the other receives 409. The holder, owner or Admin may cancel.
+Only the holder/owner/Admin can see contact before delivery. Public responses
+expose `isReservedByMe`, never the holder's identity. No expiry or waiting list.
+
+The owner confirms handover to the holder with BookId and Version; only then does
+the 14-day loan begin. Legacy owner/Admin delivery with BorrowerEmail remains
+supported for unreserved available books and cannot override a reservation.
+Reserved books cannot be edited/hidden/deleted. Mutations never auto-retry.
+
+Migration 3, AddBookReservation, adds ReservedById, a restrictive FK, index and
+status CHECK constraint. It preserves existing records. Cloud release requires
+controlled migration and matching API/client deployment; the cloud still runs
+the earlier version. Tests must use isolated databases only.
+
+Verified locally for this change: server build (zero warnings/errors), 15
+xUnit/Moq tests, 165 harness checks, isolated PostgreSQL coordinated borrower
+reservation plus delivery/return races, empty-database migrations and repeat/
+concurrent seed, and the complete Chrome workflow with final database assertions.
+Client build and all 5 contract tests passed. Deployed acceptance remains pending.
 
 Peer-to-peer lending of physical books. Scope: [PLAN.md](PLAN.md). React client
 lives in its own repository, `../BookShare.Client`. Stage 9 implementation is

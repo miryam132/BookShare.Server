@@ -21,6 +21,12 @@ public sealed class BooksController(IBookService books) : ControllerBase
     [HttpGet("{id:guid}/contact"), Authorize]
     public async Task<ActionResult<BookContactResponse>> Contact([FromRoute] Guid id, CancellationToken ct)
         => Ok(await books.ContactAsync(id, ActorIdentity.Required(User), ct));
+    [HttpPost("{id:guid}/reservation"), Authorize]
+    public async Task<ActionResult<BookResponse>> Reserve(Guid id, [FromBody] ReservationRequest request, CancellationToken ct)
+        => Ok(await books.ReserveAsync(id, request, ActorIdentity.Required(User), ct));
+    [HttpDelete("{id:guid}/reservation"), Authorize]
+    public async Task<ActionResult<BookResponse>> CancelReservation(Guid id, [FromBody] ReservationRequest request, CancellationToken ct)
+        => Ok(await books.CancelReservationAsync(id, request, ActorIdentity.Required(User), ct));
     [ProducesResponseType(typeof(BookResponse), 201)]
     [HttpPost, Authorize]
     public async Task<ActionResult<BookResponse>> Create([FromBody] CreateBookRequest request, CancellationToken ct)

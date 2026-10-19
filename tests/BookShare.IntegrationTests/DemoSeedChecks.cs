@@ -45,7 +45,7 @@ public static class DemoSeedChecks
         Console.WriteLine("CHECK: empty migrated database, disabled/missing-secret seed rejected without writes");
         await using (var db = Open())
         {
-            Require(await db.Users.CountAsync(ct) == 0 && (await db.Database.GetAppliedMigrationsAsync(ct)).Count() == 2);
+            Require(await db.Users.CountAsync(ct) == 0 && (await db.Database.GetAppliedMigrationsAsync(ct)).Count() == 3);
             foreach (var invalid in new[] { new ConfigurationBuilder().Build(), new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?> { ["DemoSeed:Enabled"] = "true" }).Build() })
             {
                 var rejected = false;

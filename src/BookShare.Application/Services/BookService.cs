@@ -19,7 +19,7 @@ public sealed class BookService(IBookRepository books, ICategoryRepository categ
     private static void Manage(Book book, Actor actor)
     {
         if (!CanManage(book, actor)) throw new AppException(403, "forbidden", "You cannot manage this book.");
-        if (book.Status == BookStatus.Loaned) throw new AppException(409, "book_loaned", "A loaned book cannot be changed.");
+        if (book.Status is BookStatus.Loaned or BookStatus.Reserved) throw new AppException(409, "book_unavailable", "A loaned or reserved book cannot be changed.");
     }
     public async Task<PagedResult<BookResponse>> ListAsync(BookQuery query, Actor? actor, CancellationToken ct)
     {
@@ -28,13 +28,45 @@ public sealed class BookService(IBookRepository books, ICategoryRepository categ
             query.SortBy is not ("title" or "title_desc" or "date" or "date_desc"))
             throw new AppException(400, "validation_error", "Invalid pagination or sorting.");
         var page = await books.ListAsync(query, query.Mine ? actor!.UserId : null, ct);
-        return new(mapper.Map<List<BookResponse>>(page.Items), page.TotalCount, page.PageNumber, page.PageSize);
+        return new(page.Items.Select(book => Response(book, actor)).ToList(), page.TotalCount, page.PageNumber, page.PageSize);
     }
     public async Task<BookResponse> GetAsync(Guid id, Actor? actor, CancellationToken ct)
-        => mapper.Map<BookResponse>(await Load(id, actor, false, ct));
+        => Response(await Load(id, actor, false, ct), actor);
+    private BookResponse Response(Book book, Actor? actor)
+        => mapper.Map<BookResponse>(book) with { IsReservedByMe = actor is not null && book.ReservedById == actor.UserId };
+
+    public Task<BookResponse> ReserveAsync(Guid id, ReservationRequest request, Actor actor, CancellationToken ct)
+        => ChangeReservation(id, request, actor, false, ct);
+    public Task<BookResponse> CancelReservationAsync(Guid id, ReservationRequest request, Actor actor, CancellationToken ct)
+        => ChangeReservation(id, request, actor, true, ct);
+    private async Task<BookResponse> ChangeReservation(Guid id, ReservationRequest request, Actor actor, bool cancel, CancellationToken ct)
+    {
+        await unit.BeginTransactionAsync(ct);
+        try
+        {
+            var book = await Load(id, actor, true, ct);
+            if (cancel && !CanManage(book, actor) && book.ReservedById != actor.UserId)
+                throw new AppException(403, "forbidden", "Only the reservation holder, owner or Admin may release the book.");
+            if (!cancel && book.OwnerId == actor.UserId)
+                throw new AppException(400, "self_reservation", "You cannot reserve your own book.");
+            if (request.Version == Guid.Empty || request.Version != book.Version || book.Status != (cancel ? BookStatus.Reserved : BookStatus.Available))
+                throw new AppException(409, "reservation_conflict", "Book changed or is unavailable. Reload before trying again.");
+            if (!cancel && await users.FindByIdAsync(actor.UserId, ct) is null)
+                throw new AppException(401, "invalid_credentials", "User no longer exists.");
+            book.ReservedById = cancel ? null : actor.UserId;
+            book.Status = cancel ? BookStatus.Available : BookStatus.Reserved;
+            await unit.SaveChangesAsync(ct);
+            await unit.CommitTransactionAsync(ct);
+            return Response(book, actor);
+        }
+        catch { await unit.RollbackTransactionAsync(CancellationToken.None); throw; }
+    }
     public async Task<BookContactResponse> ContactAsync(Guid id, Actor actor, CancellationToken ct)
     {
         var book = await Load(id, actor, false, ct);
+        if (!CanManage(book, actor) && book.Status != BookStatus.Loaned &&
+            !(book.Status == BookStatus.Reserved && book.ReservedById == actor.UserId))
+            throw new AppException(403, "reservation_required", "Reserve this book before requesting contact details.");
         if (book.Status == BookStatus.Loaned && !CanManage(book, actor) && !await loans.IsActiveBorrowerAsync(id, actor.UserId, ct))
             throw new AppException(403, "forbidden", "Contact is restricted to active loan participants.");
         var owner = await users.FindByIdAsync(book.OwnerId, ct) ?? throw new AppException(404, "user_not_found", "Owner was not found.");

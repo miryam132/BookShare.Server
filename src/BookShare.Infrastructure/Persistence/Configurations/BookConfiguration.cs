@@ -9,6 +9,9 @@ public sealed class BookConfiguration : IEntityTypeConfiguration<Book>
     public void Configure(EntityTypeBuilder<Book> builder)
     {
         builder.Property(x => x.Version).IsConcurrencyToken();
+        builder.HasOne<User>().WithMany().HasForeignKey(x => x.ReservedById).OnDelete(DeleteBehavior.Restrict);
+        builder.ToTable("Books", table => table.HasCheckConstraint("CK_Books_Reservation",
+            "(\"Status\" = 'Reserved' AND \"ReservedById\" IS NOT NULL AND \"ReservedById\" <> \"OwnerId\") OR (\"Status\" <> 'Reserved' AND \"ReservedById\" IS NULL)"));
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Title).IsRequired().HasMaxLength(300);
         builder.Property(x => x.Author).IsRequired().HasMaxLength(200);

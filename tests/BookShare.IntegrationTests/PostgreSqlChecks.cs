@@ -109,6 +109,38 @@ public static class PostgreSqlChecks
             Require(p1.TotalCount == 14 && p2.TotalCount == 14 && p1.Items.Count == 5 && p2.Items.Count == 5);
             Require(!p1.Items.Select(x => x.Id).Intersect(p2.Items.Select(x => x.Id)).Any());
 
+            Console.WriteLine("CHECK: coordinated borrower reservation race before SQL save");
+            Guid reservationVersion;
+            await using (var db = Open()) reservationVersion = (await db.Books.SingleAsync(x => x.Id == rollbackBook.Id, ct)).Version;
+            var reservePath = $"/api/books/{rollbackBook.Id}/reservation";
+            var reservationInput = new ReservationRequest { Version = reservationVersion };
+            await Status(HttpMethod.Post, reservePath, null, 401, reservationInput);
+            await Status(HttpMethod.Post, reservePath, owner, 400, reservationInput);
+            await Status(HttpMethod.Get, $"/api/books/{rollbackBook.Id}/contact", reader1, 403);
+            hook.ArmRace();
+            var reservations = await Task.WhenAll(Send(HttpMethod.Post, reservePath, reader1, reservationInput), Send(HttpMethod.Post, reservePath, reader2, reservationInput));
+            Require(reservations.Select(x => (int)x.StatusCode).Order().SequenceEqual(new[] { 200, 409 }));
+            foreach (var response in reservations) response.Dispose();
+            User winner;
+            Guid reservedVersion;
+            await using (var db = Open())
+            {
+                var reserved = await db.Books.SingleAsync(x => x.Id == rollbackBook.Id, ct);
+                Require(reserved.Status == BookStatus.Reserved && reserved.ReservedById.HasValue && reserved.Version != reservationVersion);
+                winner = reserved.ReservedById == reader1.Id ? reader1 : reader2;
+                reservedVersion = reserved.Version;
+                Require(!await db.Loans.AnyAsync(x => x.BookId == rollbackBook.Id, ct));
+            }
+            var loser = winner == reader1 ? reader2 : reader1;
+            await Status(HttpMethod.Get, $"/api/books/{rollbackBook.Id}/contact", winner, 200);
+            await Status(HttpMethod.Get, $"/api/books/{rollbackBook.Id}/contact", loser, 403);
+            await Status(HttpMethod.Delete, reservePath, loser, 403, new ReservationRequest { Version = reservedVersion });
+            await Status(HttpMethod.Post, "/api/loans", owner, 409, new { BookId = rollbackBook.Id, Version = reservedVersion, BorrowerEmail = loser.Email });
+            await Status(HttpMethod.Delete, reservePath, winner, 409, reservationInput);
+            await Status(HttpMethod.Delete, reservePath, winner, 200, new ReservationRequest { Version = reservedVersion });
+            // Reset the test's comparison token after the explicitly checked release.
+            await using (var db = Open()) rollbackBook.Version = (await db.Books.SingleAsync(x => x.Id == rollbackBook.Id, ct)).Version;
+
             Console.WriteLine("CHECK: coordinated owner/Admin delivery race before SQL save");
             hook.ArmRace();
             var calls = await Task.WhenAll(Send(HttpMethod.Post, "/api/loans", owner, Input(book.Id, reader1)),

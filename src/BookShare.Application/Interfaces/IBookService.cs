@@ -8,4 +8,6 @@ public interface IBookService
     Task<BookResponse> CreateAsync(CreateBookRequest request, Actor actor, CancellationToken ct);
     Task<BookResponse> UpdateAsync(Guid id, UpdateBookRequest request, Actor actor, CancellationToken ct);
     Task DeleteAsync(Guid id, Actor actor, CancellationToken ct);
+    Task<BookResponse> ReserveAsync(Guid id, ReservationRequest request, Actor actor, CancellationToken ct);
+    Task<BookResponse> CancelReservationAsync(Guid id, ReservationRequest request, Actor actor, CancellationToken ct);
 }

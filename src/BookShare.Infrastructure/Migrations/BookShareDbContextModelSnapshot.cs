@@ -49,6 +49,9 @@ namespace BookShare.Infrastructure.Migrations
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReservedById")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -67,7 +70,12 @@ namespace BookShare.Infrastructure.Migrations
 
                     b.HasIndex("OwnerId");
 
-                    b.ToTable("Books");
+                    b.HasIndex("ReservedById");
+
+                    b.ToTable("Books", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Books_Reservation", "(\"Status\" = 'Reserved' AND \"ReservedById\" IS NOT NULL AND \"ReservedById\" <> \"OwnerId\") OR (\"Status\" <> 'Reserved' AND \"ReservedById\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("BookShare.Domain.Entities.BookCategory", b =>
@@ -203,6 +211,11 @@ namespace BookShare.Infrastructure.Migrations
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BookShare.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReservedById")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Owner");
                 });

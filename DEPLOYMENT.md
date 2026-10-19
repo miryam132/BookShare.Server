@@ -2,8 +2,42 @@
 
 Updated 2026-10-19. The user authorized private GitHub publication and connection /
 deployment on Render's free tier only. Paid resources, paid upgrades and charges
-are not authorized. No Render deployment has occurred. The local application
+are not authorized. See the current deployment status below. The local application
 database must remain untouched.
+
+## Current status — 2026-10-20
+
+The reservation scope change is local and not yet released. Cloud services still
+use the previous version. Before releasing it, rebuild the maintenance Docker
+image, apply migration 3 to bookshare_demo as controlled maintenance, then deploy
+the matching API and client with autodeploy off. Never point tests at cloud DB.
+Acceptance now includes two borrowers reserving the same Version (200/409),
+holder-only contact, cancellation/re-reservation, stale cancellation rejection,
+and owner handover to the holder followed by return.
+
+- Free API: https://bookshare-api-9xuy.onrender.com (Render reports Live).
+- Static client: https://bookshare-client.onrender.com (Live).
+- Free PostgreSQL 18 in Frankfurt: bookshare-demo / bookshare_demo,
+  expires 2026-11-18 at 18:22 UTC. No paid resources were created.
+- The operator reported successful cloud migrations and successful seed plus
+  repeated seed. Independent final database verification is still pending.
+- Deployed Chrome checks returned HTTP 418 with `blockByNetFree: true`.
+  The operator requested URL review. Full deployed acceptance remains pending;
+  a Live deployment alone does not complete stage 9.
+- Remove the temporary local IP rule after cloud acceptance/verification, retaining
+  only the approved API outbound ranges. Do not open access to all addresses.
+- A shorter free client address containing `book` is requested, still pending.
+
+Local preview without Render or Docker: from the server root run
+`powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Preview.ps1`
+after the documented Stage7 build. Requires installed PostgreSQL 18 binaries,
+Node dependencies and free port 5173. This creates a new temporary loopback-only
+PostgreSQL cluster, applies migrations and seed there, and serves the client at
+http://127.0.0.1:5173. It never uses the application's local database or cloud DB.
+Register a preview account in the UI. Generated seed credentials are stored only
+as Windows DPAPI-encrypted SecureStrings in the printed temporary directory.
+Keep the launcher running; Ctrl+C stops its services and cluster. Temporary
+artifacts are retained for inspection; this preview is not deployed acceptance.
 
 ## Proposed resources and costs
 

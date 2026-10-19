@@ -37,7 +37,15 @@ public class CreateBookRequest
 
 public sealed record BookResponse(Guid Id, Guid OwnerId, string Title, string Author,
     string Description, string City, BookStatus Status, Guid Version, DateTime CreatedAtUtc,
-    IReadOnlyList<CategoryResponse> Categories);
+    IReadOnlyList<CategoryResponse> Categories)
+{
+    public bool IsReservedByMe { get; init; }
+}
+
+public sealed class ReservationRequest
+{
+    public Guid Version { get; set; }
+}
 
 public sealed record BookContactResponse(string FullName, string Email, string ContactPhone);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
@@ -65,7 +73,8 @@ public sealed record Actor(Guid UserId, bool IsAdmin);
 public sealed class CreateLoanRequest
 {
     public Guid BookId { get; set; }
-    [Required, EmailAddress, StringLength(254)] public string BorrowerEmail { get; set; } = string.Empty;
+    public Guid? Version { get; set; }
+    [EmailAddress, StringLength(254)] public string? BorrowerEmail { get; set; }
 }
 public sealed record LoanResponse(Guid Id, Guid BookId, Guid BorrowerId, Guid RecordedByUserId,
     DateTime BorrowedAtUtc, DateTime DueAtUtc, DateTime? ReturnedAtUtc);

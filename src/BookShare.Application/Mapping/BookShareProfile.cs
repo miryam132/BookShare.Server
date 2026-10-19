@@ -13,6 +13,7 @@ public sealed class BookShareProfile : Profile
         CreateMap<User, BookContactResponse>();
         CreateMap<Category, CategoryResponse>();
         CreateMap<Book, BookResponse>()
+            .ForMember(x => x.IsReservedByMe, options => options.Ignore())
             .ForCtorParam("Categories", options => options.MapFrom(
                 source => source.BookCategories.Select(link => link.Category)));
     }

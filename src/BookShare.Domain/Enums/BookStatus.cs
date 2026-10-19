@@ -1,3 +1,3 @@
 ﻿namespace BookShare.Domain.Enums;
 
-public enum BookStatus { Available, Loaned, Hidden }
+public enum BookStatus { Available, Loaned, Hidden, Reserved }

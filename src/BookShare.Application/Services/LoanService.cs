@@ -36,14 +36,22 @@ public sealed class LoanService(ILoanRepository loans, IBookRepository books, IU
         {
             var book = await books.FindByIdAsync(request.BookId, true, ct) ?? throw new AppException(404, "book_not_found", "Book was not found.");
             Manage(book, actor);
-            if (book.Status != BookStatus.Available) throw new AppException(409, "book_unavailable", "Book is not available.");
-            var borrower = await users.FindByNormalizedEmailAsync(request.BorrowerEmail.Trim().ToUpperInvariant(), ct)
+            if (book.Status == BookStatus.Reserved && (request.Version is null || request.Version != book.Version))
+                throw new AppException(409, "version_conflict", "Reservation changed; reload before confirming delivery.");
+            if (book.Status is not (BookStatus.Available or BookStatus.Reserved)) throw new AppException(409, "book_unavailable", "Book is not available.");
+            // A reserved book can only be handed to its reservation holder.
+            var borrower = (book.Status == BookStatus.Reserved
+                ? await users.FindByIdAsync(book.ReservedById!.Value, ct)
+                : await users.FindByNormalizedEmailAsync((request.BorrowerEmail ?? "").Trim().ToUpperInvariant(), ct))
                 ?? throw new AppException(400, "borrower_not_found", "Borrower must be registered.");
+            if (book.Status == BookStatus.Reserved && !string.IsNullOrWhiteSpace(request.BorrowerEmail) &&
+                !string.Equals(borrower.Email, request.BorrowerEmail.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new AppException(409, "reservation_mismatch", "Delivery must be to the reservation holder.");
             if (borrower.Id == book.OwnerId) throw new AppException(400, "self_loan", "The owner cannot borrow their own book.");
             var now = DateTime.UtcNow;
             var loan = new Loan { BookId = book.Id, Book = book, BorrowerId = borrower.Id, RecordedByUserId = actor.UserId,
                 BorrowedAtUtc = now, DueAtUtc = now.AddDays(options.Value.DurationDays) };
-            loans.Add(loan); book.Status = BookStatus.Loaned;
+            loans.Add(loan); book.Status = BookStatus.Loaned; book.ReservedById = null;
             await unit.SaveChangesAsync(ct);
             await unit.CommitTransactionAsync(ct);
             return mapper.Map<LoanResponse>(loan);

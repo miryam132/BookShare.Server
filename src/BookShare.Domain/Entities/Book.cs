@@ -6,6 +6,7 @@ public sealed class Book
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid Version { get; set; } = Guid.NewGuid();
+    public Guid? ReservedById { get; set; }
     public ICollection<Loan> Loans { get; set; } = new List<Loan>();
     public Guid OwnerId { get; set; }
     public User Owner { get; set; } = null!;

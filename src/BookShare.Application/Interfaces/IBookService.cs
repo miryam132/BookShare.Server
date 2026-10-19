@@ -5,6 +5,7 @@ public interface IBookService
     Task<PagedResult<BookResponse>> ListAsync(BookQuery query, Actor? actor, CancellationToken ct);
     Task<BookResponse> GetAsync(Guid id, Actor? actor, CancellationToken ct);
     Task<BookContactResponse> ContactAsync(Guid id, Actor actor, CancellationToken ct);
+    Task<ReservationContactResponse> ReservationContactAsync(Guid id, Actor actor, CancellationToken ct);
     Task<BookResponse> CreateAsync(CreateBookRequest request, Actor actor, CancellationToken ct);
     Task<BookResponse> UpdateAsync(Guid id, UpdateBookRequest request, Actor actor, CancellationToken ct);
     Task DeleteAsync(Guid id, Actor actor, CancellationToken ct);

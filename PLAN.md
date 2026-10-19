@@ -109,6 +109,7 @@ ASP.NET Core Web API על [.NET 10](https://dotnet.microsoft.com/en-us/platform/
 | ספרים | `GET/POST /api/books`, `GET/PUT/DELETE /api/books/{id}` |
 | תפיסה וביטול | `POST/DELETE /api/books/{id}/reservation` עם Version |
 | יצירת קשר | `GET /api/books/{id}/contact` — לתופס, לבעלים, למנהל או לצד מורשה בהשאלה פעילה |
+| פרטי המבקש | `GET /api/books/{id}/reservation/contact` — שם, דוא״ל, טלפון ו־Version של התפיסה; לבעלים ולמנהל בלבד |
 | קטגוריות | `GET/POST /api/categories`, `GET/PUT/DELETE /api/categories/{id}` |
 | השאלות | `POST/GET /api/loans`, `GET /api/loans/{id}` |
 | החזרה | `PUT /api/loans/{id}/return` — תת־משאב של תיעוד החזרה |

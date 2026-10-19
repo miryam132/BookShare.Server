@@ -10,6 +10,11 @@ expose `isReservedByMe`, never the holder's identity. No expiry or waiting list.
 The loans screen lists pending reservations separately, using authenticated
 `GET /api/books?reservedByMe=true`. Filtering and pagination happen in the database;
 even Admin sees only their own reservations. Cannot combine this filter with mine.
+Owner/Admin can read the holder's name, email and phone from authenticated
+`GET /api/books/{id}/reservation/contact` (no-store). The response includes the
+current Version; the UI requires matching requester details before handover.
+Other users, including the holder, cannot use this owner-only endpoint. Public
+book/list responses never include requester identity. No schema change is needed.
 
 The owner confirms handover to the holder with BookId and Version; only then does
 the 14-day loan begin. Legacy owner/Admin delivery with BorrowerEmail remains

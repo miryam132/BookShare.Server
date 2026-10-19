@@ -132,6 +132,22 @@ public static class PostgreSqlChecks
                 Require(!await db.Loans.AnyAsync(x => x.BookId == rollbackBook.Id, ct));
             }
             var loser = winner == reader1 ? reader2 : reader1;
+            var requesterPath = $"/api/books/{rollbackBook.Id}/reservation/contact";
+            await Status(HttpMethod.Get, requesterPath, null, 401);
+            await Status(HttpMethod.Get, requesterPath, winner, 403);
+            await Status(HttpMethod.Get, requesterPath, loser, 403);
+            foreach (var manager in new[] { owner, admin })
+            {
+                using var response = await Send(HttpMethod.Get, requesterPath, manager);
+                Require((int)response.StatusCode == 200);
+                var details = (await response.Content.ReadFromJsonAsync<ReservationContactResponse>(ct))!;
+                Require(details.FullName == winner.FullName && details.Email == winner.Email && details.ContactPhone == winner.ContactPhone && details.Version == reservedVersion);
+            }
+            using (var response = await Send(HttpMethod.Get, $"/api/books/{rollbackBook.Id}", null))
+            {
+                var json = await response.Content.ReadAsStringAsync(ct);
+                Require(!json.Contains(winner.Email) && !json.Contains(winner.ContactPhone) && !json.Contains(winner.Id.ToString()));
+            }
             const string reservedList = "/api/books?reservedByMe=true&pageSize=1";
             await Status(HttpMethod.Get, reservedList, null, 401);
             await Status(HttpMethod.Get, "/api/books?reservedByMe=true&mine=true", winner, 400);
@@ -149,6 +165,7 @@ public static class PostgreSqlChecks
             await Status(HttpMethod.Post, "/api/loans", owner, 409, new { BookId = rollbackBook.Id, Version = reservedVersion, BorrowerEmail = loser.Email });
             await Status(HttpMethod.Delete, reservePath, winner, 409, reservationInput);
             await Status(HttpMethod.Delete, reservePath, winner, 200, new ReservationRequest { Version = reservedVersion });
+            await Status(HttpMethod.Get, requesterPath, owner, 409);
             using (var response = await Send(HttpMethod.Get, reservedList, winner))
                 Require((await response.Content.ReadFromJsonAsync<PagedResult<BookResponse>>(ct))!.TotalCount == 0);
             // Reset the test's comparison token after the explicitly checked release.

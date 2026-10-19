@@ -48,6 +48,7 @@ public sealed class ReservationRequest
 }
 
 public sealed record BookContactResponse(string FullName, string Email, string ContactPhone);
+public sealed record ReservationContactResponse(Guid Version, string FullName, string Email, string ContactPhone);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageNumber, int PageSize);
 
 public sealed class UpdateBookRequest : CreateBookRequest

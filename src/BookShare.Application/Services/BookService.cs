@@ -73,6 +73,16 @@ public sealed class BookService(IBookRepository books, ICategoryRepository categ
         var owner = await users.FindByIdAsync(book.OwnerId, ct) ?? throw new AppException(404, "user_not_found", "Owner was not found.");
         return mapper.Map<BookContactResponse>(owner);
     }
+    public async Task<ReservationContactResponse> ReservationContactAsync(Guid id, Actor actor, CancellationToken ct)
+    {
+        var book = await Load(id, actor, false, ct);
+        if (!CanManage(book, actor)) throw new AppException(403, "forbidden", "Only the owner or Admin may view the requester.");
+        if (book.Status != BookStatus.Reserved || book.ReservedById is null)
+            throw new AppException(409, "reservation_conflict", "No active reservation. Reload the book.");
+        var requester = await users.FindByIdAsync(book.ReservedById.Value, ct)
+            ?? throw new AppException(404, "user_not_found", "Reservation holder was not found.");
+        return new(book.Version, requester.FullName, requester.Email, requester.ContactPhone);
+    }
     private async Task Apply(Book book, CreateBookRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Author) ||

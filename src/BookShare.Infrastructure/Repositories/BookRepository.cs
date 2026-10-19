@@ -18,7 +18,8 @@ public sealed class BookRepository(BookShareDbContext context) : IBookRepository
     public async Task<BookShare.Application.DTOs.PagedResult<Book>> ListAsync(BookShare.Application.DTOs.BookQuery query, Guid? ownerId, CancellationToken cancellationToken)
     {
         var books = context.Books.AsNoTracking().AsQueryable();
-        books = ownerId.HasValue ? books.Where(x => x.OwnerId == ownerId.Value)
+        books = query.ReservedByMe ? books.Where(x => x.ReservedById == ownerId && x.Status == BookShare.Domain.Enums.BookStatus.Reserved)
+            : ownerId.HasValue ? books.Where(x => x.OwnerId == ownerId.Value)
             : books.Where(x => x.Status != BookShare.Domain.Enums.BookStatus.Hidden);
         if (query.AvailableOnly) books = books.Where(x => x.Status == BookShare.Domain.Enums.BookStatus.Available);
         if (query.CategoryId.HasValue) books = books.Where(x => x.BookCategories.Any(c => c.CategoryId == query.CategoryId.Value));

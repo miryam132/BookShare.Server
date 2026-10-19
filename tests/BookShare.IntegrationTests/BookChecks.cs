@@ -121,7 +121,9 @@ public sealed class MemoryBooks : IBookRepository
     public Task<Book?> FindByIdAsync(Guid id, bool trackChanges, CancellationToken ct) => Task.FromResult(Items.SingleOrDefault(x => x.Id == id));
     public Task<PagedResult<Book>> ListAsync(BookQuery query, Guid? ownerId, CancellationToken ct)
     {
-        IEnumerable<Book> items = Items.Where(x => ownerId.HasValue ? x.OwnerId == ownerId : x.Status != BookStatus.Hidden);
+        IEnumerable<Book> items = Items.Where(x => query.ReservedByMe
+            ? x.Status == BookStatus.Reserved && x.ReservedById == ownerId
+            : ownerId.HasValue ? x.OwnerId == ownerId : x.Status != BookStatus.Hidden);
         if (query.AvailableOnly) items = items.Where(x => x.Status == BookStatus.Available);
         if (query.CategoryId.HasValue) items = items.Where(x => x.BookCategories.Any(c => c.CategoryId == query.CategoryId));
         if (!string.IsNullOrWhiteSpace(query.City)) items = items.Where(x => x.City.Equals(query.City.Trim(), StringComparison.OrdinalIgnoreCase));

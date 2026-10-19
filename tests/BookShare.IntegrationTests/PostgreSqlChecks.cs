@@ -132,12 +132,25 @@ public static class PostgreSqlChecks
                 Require(!await db.Loans.AnyAsync(x => x.BookId == rollbackBook.Id, ct));
             }
             var loser = winner == reader1 ? reader2 : reader1;
+            const string reservedList = "/api/books?reservedByMe=true&pageSize=1";
+            await Status(HttpMethod.Get, reservedList, null, 401);
+            await Status(HttpMethod.Get, "/api/books?reservedByMe=true&mine=true", winner, 400);
+            foreach (var actor in new[] { winner, loser, owner, admin })
+            {
+                using var response = await Send(HttpMethod.Get, reservedList, actor);
+                Require((int)response.StatusCode == 200);
+                var personal = (await response.Content.ReadFromJsonAsync<PagedResult<BookResponse>>(ct))!;
+                Require(personal.TotalCount == (actor == winner ? 1 : 0));
+                if (actor == winner) Require(personal.Items.Single().Id == rollbackBook.Id && personal.Items.Single().IsReservedByMe);
+            }
             await Status(HttpMethod.Get, $"/api/books/{rollbackBook.Id}/contact", winner, 200);
             await Status(HttpMethod.Get, $"/api/books/{rollbackBook.Id}/contact", loser, 403);
             await Status(HttpMethod.Delete, reservePath, loser, 403, new ReservationRequest { Version = reservedVersion });
             await Status(HttpMethod.Post, "/api/loans", owner, 409, new { BookId = rollbackBook.Id, Version = reservedVersion, BorrowerEmail = loser.Email });
             await Status(HttpMethod.Delete, reservePath, winner, 409, reservationInput);
             await Status(HttpMethod.Delete, reservePath, winner, 200, new ReservationRequest { Version = reservedVersion });
+            using (var response = await Send(HttpMethod.Get, reservedList, winner))
+                Require((await response.Content.ReadFromJsonAsync<PagedResult<BookResponse>>(ct))!.TotalCount == 0);
             // Reset the test's comparison token after the explicitly checked release.
             await using (var db = Open()) rollbackBook.Version = (await db.Books.SingleAsync(x => x.Id == rollbackBook.Id, ct)).Version;
 

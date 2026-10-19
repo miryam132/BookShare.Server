@@ -63,6 +63,7 @@ public sealed class BookQuery
     [StringLength(100)] public string? City { get; set; }
     public bool AvailableOnly { get; set; }
     public bool Mine { get; set; }
+    public bool ReservedByMe { get; set; }
     [RegularExpression("^(title|title_desc|date|date_desc)$")] public string SortBy { get; set; } = "date_desc";
     [Range(1, int.MaxValue)] public int PageNumber { get; set; } = 1;
     [Range(1, 50)] public int PageSize { get; set; } = 10;

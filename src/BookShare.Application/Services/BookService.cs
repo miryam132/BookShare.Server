@@ -23,11 +23,12 @@ public sealed class BookService(IBookRepository books, ICategoryRepository categ
     }
     public async Task<PagedResult<BookResponse>> ListAsync(BookQuery query, Actor? actor, CancellationToken ct)
     {
-        if (query.Mine && actor is null) throw new AppException(401, "authentication_required", "Authentication is required for mine.");
+        if ((query.Mine || query.ReservedByMe) && actor is null) throw new AppException(401, "authentication_required", "Authentication is required for personal book lists.");
+        if (query.Mine && query.ReservedByMe) throw new AppException(400, "validation_error", "Choose owned books or reserved books, not both.");
         if (query.PageNumber < 1 || query.PageSize < 1 || query.PageSize > 50 ||
             query.SortBy is not ("title" or "title_desc" or "date" or "date_desc"))
             throw new AppException(400, "validation_error", "Invalid pagination or sorting.");
-        var page = await books.ListAsync(query, query.Mine ? actor!.UserId : null, ct);
+        var page = await books.ListAsync(query, query.Mine || query.ReservedByMe ? actor!.UserId : null, ct);
         return new(page.Items.Select(book => Response(book, actor)).ToList(), page.TotalCount, page.PageNumber, page.PageSize);
     }
     public async Task<BookResponse> GetAsync(Guid id, Actor? actor, CancellationToken ct)

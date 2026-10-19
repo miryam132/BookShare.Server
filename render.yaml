@@ -1,0 +1,20 @@
+# Review and approve costs before applying. Separate server repository root.
+services:
+  - type: web
+    name: bookshare-api
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    autoDeployTrigger: 'off'
+    healthCheckPath: /api/health/database
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Hosting__BehindTlsProxy
+        value: true
+      - key: ConnectionStrings__BookShare
+        sync: false
+      - key: Jwt__SigningKey
+        sync: false
+      - key: Cors__AllowedOrigins__0
+        sync: false

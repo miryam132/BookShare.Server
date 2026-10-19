@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BookShare.API/BookShare.API.csproj" />
+    <Project Path="src/BookShare.Application/BookShare.Application.csproj" />
+    <Project Path="src/BookShare.Domain/BookShare.Domain.csproj" />
+    <Project Path="src/BookShare.Infrastructure/BookShare.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BookShare.Application.Tests/BookShare.Application.Tests.csproj" />
+    <Project Path="tests/BookShare.IntegrationTests/BookShare.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

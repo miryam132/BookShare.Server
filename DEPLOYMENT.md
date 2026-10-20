@@ -7,6 +7,15 @@ database must remain untouched.
 
 ## Current status — 2026-10-20
 
+Review fixes are ready locally: correct business-error log status/Warning,
+development User Secrets, no-tracking reads with explicit tracked update paths,
+and consolidated READMEs. They add no further schema migration. During this
+review the API dashboard reported autoDeploy=yes (commit); the static client
+reported autoDeploy=no. Blueprint files still specify off. Do not push the new
+server revision until cloud migration 3 succeeds or dashboard auto-deploy is
+disabled: a push currently deploys automatically. No cloud database was changed
+by these fixes or tests. The existing deployment is still the old version.
+
 The reservation scope change is local and not yet released. Cloud services still
 use the previous version. Before releasing it, rebuild the maintenance Docker
 image, apply migration 3 to bookshare_demo as controlled maintenance, then deploy
@@ -135,7 +144,7 @@ redirection to avoid proxy loops. Do not expose that HTTP container directly.
 2. Create the approved database and service(s). Set secrets privately. First API
    health checks may fail until schema initialization. Never solve this by enabling
    migrations at normal startup. Record the immutable source revision/image.
-3. Back up an existing target database and review both migration files. For an
+3. Back up an existing target database and review all three migration files. For an
    existing application database, applying migration 2 requires its own controlled
    approval. Stop API writes while changing schema. Set `Maintenance__Database`
    to the exact approved target name.
@@ -150,7 +159,7 @@ redirection to avoid proxy loops. Do not expose that HTTP container directly.
    docker run --rm --env ConnectionStrings__BookShare --env Maintenance__Database bookshare-api:stage9 --maintenance-migrate
    ```
 
-   It applies both migrations to a fresh cloud database and exits nonzero on
+   It applies all three migrations to a fresh cloud database and exits nonzero on
    failure without sensitive provider output. Confirm database identity first;
    never reuse the local application connection. Verify migration history and
    health before enabling writes. Do not run tests against this application/demo
@@ -205,4 +214,4 @@ started. The image runs non-root, listens on 10000, has a writable `/app/logs`,
 enforces restricted CORS and JWT 401, and disables Swagger in Production. Test
 containers were stopped/removed. A transient Docker DNS/NuGet download failure
 was followed by a successful complete rebuild and final runtime check. No image
-was pushed; Render deployment and its database workflow remain pending approval.
+was pushed; Initial Render services are deployed; the updated release, migration 3 and complete cloud workflow remain pending.

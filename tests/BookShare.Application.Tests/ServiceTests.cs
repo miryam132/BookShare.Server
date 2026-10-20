@@ -28,7 +28,7 @@ public sealed class ServiceTests
     public ServiceTests()
     {
         books.Setup(x => x.FindByIdAsync(book.Id, true, ct)).ReturnsAsync(book);
-        users.Setup(x => x.FindByNormalizedEmailAsync("READER@EXAMPLE.COM", ct)).ReturnsAsync(borrower);
+        users.Setup(x => x.FindByNormalizedEmailAsync("READER@EXAMPLE.COM", ct, false)).ReturnsAsync(borrower);
     }
 
     [Theory]
@@ -61,7 +61,7 @@ public sealed class ServiceTests
     {
         if (scenario == "busy") book.Status = BookStatus.Loaned;
         if (scenario == "self") borrower.Id = book.OwnerId;
-        if (scenario == "missing") users.Setup(x => x.FindByNormalizedEmailAsync("READER@EXAMPLE.COM", ct)).ReturnsAsync((User?)null);
+        if (scenario == "missing") users.Setup(x => x.FindByNormalizedEmailAsync("READER@EXAMPLE.COM", ct, false)).ReturnsAsync((User?)null);
         var actor = scenario == "outsider" ? new Actor(Guid.NewGuid(), false) : Owner;
         var error = await Assert.ThrowsAsync<AppException>(() => Service.CreateAsync(Request, actor, ct));
         Assert.Equal(status, error.Status); Assert.Equal(code, error.Code);

@@ -1,7 +1,8 @@
 param(
     [string]$PostgresBin = 'C:\Program Files\PostgreSQL\18\bin',
     [switch]$Client,
-    [switch]$Seed
+    [switch]$Seed,
+    [string]$BaseOutputPath = 'bin/Stage7/'
 )
 $ErrorActionPreference = 'Stop'
 if ($Client -and $Seed) { throw 'Choose Client or Seed, not both.' }
@@ -40,11 +41,11 @@ try {
     Push-Location (Split-Path $PSScriptRoot -Parent)
     try {
         if ($Seed) {
-            dotnet run --project tests/BookShare.IntegrationTests --no-restore -p:BaseOutputPath=bin/Stage7/ -- --seed
+            dotnet run --project tests/BookShare.IntegrationTests --no-restore "-p:BaseOutputPath=$BaseOutputPath" -- --seed
         } elseif ($Client) {
-            dotnet run --project tests/BookShare.IntegrationTests --no-restore -p:BaseOutputPath=bin/Stage7/ -- --client
+            dotnet run --project tests/BookShare.IntegrationTests --no-restore "-p:BaseOutputPath=$BaseOutputPath" -- --client
         } else {
-            dotnet run --project tests/BookShare.IntegrationTests --no-restore -p:BaseOutputPath=bin/Stage7/ -- --postgres
+            dotnet run --project tests/BookShare.IntegrationTests --no-restore "-p:BaseOutputPath=$BaseOutputPath" -- --postgres
         }
         $testExit = $LASTEXITCODE
     } finally { Pop-Location }

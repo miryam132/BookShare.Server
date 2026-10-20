@@ -1,169 +1,157 @@
 # BookShare Server
 
-## Reservation update — 2026-10-20
+Peer-to-peer lending of physical books. Each ad represents one copy. A borrower
+reserves it, contacts its owner, and coordinates collection. The owner confirms
+actual handover, starting the 14-day loan, and later confirms return.
+Scope: [PLAN.md](PLAN.md). Release: [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Borrowers now reserve a physical book before contacting its owner. POST and DELETE
-`/api/books/{id}/reservation` accept the current Version. One competing borrower
-succeeds (200), the other receives 409. The holder, owner or Admin may cancel.
-Only the holder/owner/Admin can see contact before delivery. Public responses
-expose `isReservedByMe`, never the holder's identity. No expiry or waiting list.
-The loans screen lists pending reservations separately, using authenticated
-`GET /api/books?reservedByMe=true`. Filtering and pagination happen in the database;
-even Admin sees only their own reservations. Cannot combine this filter with mine.
-Owner/Admin can read the holder's name, email and phone from authenticated
-`GET /api/books/{id}/reservation/contact` (no-store). The response includes the
-current Version; the UI requires matching requester details before handover.
-Other users, including the holder, cannot use this owner-only endpoint. Public
-book/list responses never include requester identity. No schema change is needed.
+## Architecture and requirements
 
-The owner confirms handover to the holder with BookId and Version; only then does
-the 14-day loan begin. Legacy owner/Admin delivery with BorrowerEmail remains
-supported for unreserved available books and cannot override a reservation.
-Reserved books cannot be edited/hidden/deleted. Mutations never auto-retry.
+Four .NET 10 projects in BookShare.slnx: Domain (entities/enums, no external
+packages), Application (services, DTOs, interfaces, AutoMapper), Infrastructure
+(EF Core/Npgsql, repositories, transactions and JWT/password security), API
+(controllers, middleware, configuration and DI). Controllers call services and
+repositories; DbContext/services/repositories are scoped.
 
-Migration 3, AddBookReservation, adds ReservedById, a restrictive FK, index and
-status CHECK constraint. It preserves existing records. Cloud release requires
-controlled migration and matching API/client deployment; the cloud still runs
-the earlier version. Tests must use isolated databases only.
+Requirements: .NET SDK 10.0.400 or compatible patch, PostgreSQL 18 (tests verified
+with 18.6), PowerShell, Git; client Node 22.12+ and npm. Browser tests require
+Google Chrome and port 5173 free. No packages were added for the review fixes.
 
-Verified locally for this change: server build (zero warnings/errors), 15
-xUnit/Moq tests, 165 harness checks, isolated PostgreSQL coordinated borrower
-reservation plus delivery/return races, empty-database migrations and repeat/
-concurrent seed, and the complete Chrome workflow with final database assertions.
-Client build and all 5 contract tests passed. Deployed acceptance remains pending.
+## Local run
 
-Peer-to-peer lending of physical books. Scope: [PLAN.md](PLAN.md). React client
-lives in its own repository, `../BookShare.Client`. Stage 9 implementation is
-prepared; deployment acceptance is still pending. See [DEPLOYMENT.md](DEPLOYMENT.md)
-for the concrete Render proposal, costs, secrets and controlled release steps.
-
-The user subsequently requested Render Free only. `render.yaml` now explicitly
-uses `plan: free`; paid resources/upgrades are not authorized. Free Postgres
-expires after 30 days, and the API sleeps after 15 idle minutes. Free services
-have no shell/pre-deploy; DEPLOYMENT.md documents controlled local Docker
-maintenance against the separately created cloud demo database. The account
-connection, resource creation and deployed acceptance have not yet occurred.
-
-## Requirements and architecture
-
-.NET SDK 10.0.400 (latest patch), PostgreSQL 18 (verified locally with 18.6), Git,
-PowerShell on Windows. Client: Node 22.12+ and npm; browser tests: installed Google
-Chrome and free port 5173. No package was added for stage 9.
-
-- Domain: entities/enums, no EF or HTTP dependency.
-- Application: services, DTOs, AutoMapper profiles and persistence interfaces.
-- Infrastructure: EF Core/Npgsql, repositories, transactions, JWT/password hashing
-  and explicit demo provisioning.
-- API: short controllers, DI, middleware, authentication/authorization and NLog.
-
-Controller -> Application service -> Repository -> PostgreSQL. Members manage
-books they own; Admin manages categories and may assist with all books/loans.
-Registration always creates Member. Contact details require a dedicated authorized
-request. JWT is kept only in client memory; refresh requires another login.
-
-## First run from an empty database
-
-Create a dedicated PostgreSQL login and database owned by it (non-superuser).
-Choose and retain the database password privately. Run from this repository root:
+From the server repository:
 
 ```powershell
 dotnet restore BookShare.slnx
-dotnet build BookShare.slnx --no-restore
-# Explicit database change: inspect both migration files first.
+dotnet build BookShare.slnx --no-restore -p:BaseOutputPath=bin/Stage7/
+```
+
+Install client dependencies with npm.cmd ci in the separate client repository.
+For a disposable demo, with no manual database changes:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Start-Preview.ps1
+```
+
+This creates a NEW temporary loopback PostgreSQL cluster, applies all three
+migrations and seed, and serves http://127.0.0.1:5173. Requires PostgreSQL 18
+binaries (default C:\Program Files\PostgreSQL\18\bin, override -PostgresBin).
+Docker is not required. Keep the launcher running; Ctrl+C stops its services and
+cluster. A fresh launch has new data/passwords. The printed temporary folder holds
+logs and Windows DPAPI-encrypted demo credentials for the same Windows account.
+Never publish that file. Application and Render databases are not used.
+
+For a persistent local database, first create a dedicated PostgreSQL login and
+database owned by it, then run these separately:
+
+```powershell
 ./scripts/Start-Local.ps1 -UpdateDatabase
 ./scripts/Start-Local.ps1 -Seed
 ./scripts/Start-Local.ps1
 ```
 
-All three commands prompt for the database password without echoing it. Use
-`-DatabaseHost`, `-DatabasePort`, `-DatabaseName`, `-DatabaseUser` for another target.
-Migration/seed additionally require typing the exact target database name. They
-are separate operations and cannot be combined. Do not point test commands at
-this database. The application database's second migration was NOT applied during
-stage-9 verification; an existing application database requires separate approval.
+Defaults: localhost:5432, database/login bookshare. Override -DatabaseHost,
+-DatabasePort, -DatabaseName, -DatabaseUser. Passwords are prompted invisibly;
+maintenance requires exact database-name confirmation. Normal API startup never
+migrates or seeds. Do not run verification against the application database.
 
-Open http://localhost:5213/swagger (Development only). Health: `/api/health` and
-`/api/health/database` (200/503). Start the client separately per its README.
-Normal API startup never migrates or seeds. Migrations are InitialCreate and
-AddLoansAndBookVersion; files are in `src/BookShare.Infrastructure/Migrations`.
-Design-time EF commands read `ConnectionStrings__BookShare`; restore the local EF
-tool with `dotnet tool restore` if needed. Prefer controlled maintenance commands
-for application, rather than manually executing the historical SQL snapshots.
+## Development User Secrets
 
-## Secrets and demo
+API UserSecretsId is BookShare.API-development. Standard ASP.NET configuration
+loads this store only in Development. To configure without values in shell history:
 
-Never put passwords, signing keys, JWTs or connection strings in Git, chat, shell
-command arguments/history, screenshots or logs. `.env` is not automatically read.
-The local script supplies process environment variables and restores previous
-values in finally. Seed password prompts are hidden. Retain the four different
-passwords in a password manager and share privately with the examiner; no real
-password is documented here. Ctrl+C/forced process termination may bypass cleanup;
-close that shell if interrupted. Secret strings necessarily exist in process memory.
+```powershell
+./scripts/Set-DevelopmentSecrets.ps1
+dotnet run --project src/BookShare.API --launch-profile http
+```
 
-For IDE/hosting configure secrets privately:
+The helper prompts for the local connection string invisibly and saves it and a
+random Base64 JWT signing key outside Git using JSON on stdin. It changes no DB.
+Running it again replaces the development key and invalidates existing tokens.
+User Secrets are for development, not an encrypted production vault. Never publish
+user-secrets list output. The Start-Local wrapper remains independently usable:
+it temporarily supplies process environment settings and restores previous values.
 
-- `ConnectionStrings__BookShare`: Npgsql key/value string (not a PostgreSQL URI).
-- `Jwt__SigningKey`: Base64 of at least 32 random bytes, stable across instances.
-  The local script generates a temporary key if absent; restarting invalidates tokens.
-- `Jwt__Issuer`, `Jwt__Audience`, `Jwt__LifetimeMinutes`: appsettings defaults or
-  explicit overrides; signature, issuer, audience and expiry are validated.
-- `Loans__DurationDays`: 14 by default (validated 1-365).
-- `Cors__AllowedOrigins__0`: exact public client origin when hosting separately.
-  No origin is allowed by default; local Vite proxy needs no CORS permission.
+In Render, use environment settings. Never use client variables or build args
+for server secrets. The API does not automatically read .env files.
 
-Seed requires `DemoSeed__Enabled=true`, exact `Maintenance__Database` confirmation,
-and `DemoSeed__AdminPassword`, `DemoSeed__OwnerPassword`,
-`DemoSeed__Borrower1Password`, `DemoSeed__Borrower2Password`. Four distinct secrets,
-16-128 characters each; no defaults. CLI, after privately supplying settings:
+| Setting | Meaning |
+|---|---|
+| ConnectionStrings__BookShare | Npgsql key/value string, not a postgres URI |
+| Jwt__SigningKey | Base64 of at least 32 random bytes; stable per deployment |
+| Jwt__Issuer / Jwt__Audience | Defaults BookShare / BookShare.Client |
+| Jwt__LifetimeMinutes | Default 60, validated 1-1440 |
+| Loans__DurationDays | Default 14, validated 1-365 |
+| Cors__AllowedOrigins__0 | Exact approved client origin, no path/trailing slash |
+| Hosting__BehindTlsProxy | true only behind the Render HTTPS edge |
+
+No secrets in Git, chat, screenshots or logs. JWT is client-memory only; refresh
+requires login. Mutation requests are never automatically retried.
+
+## Migrations and seed
+
+Review all three migrations in src/BookShare.Infrastructure/Migrations:
+InitialCreate, AddLoansAndBookVersion, AddBookReservation. The third adds the
+reservation holder FK, index and status CHECK without deleting existing data.
+Schema generation is offline with the design-time factory; dotnet tool restore
+restores the pinned EF tool. Never drop/truncate or run database update 0 as a fix.
+
+Maintenance CLI (privately configure settings first):
 
 ```powershell
 dotnet run --project src/BookShare.API --no-launch-profile -- --maintenance-migrate
 dotnet run --project src/BookShare.API --no-launch-profile -- --maintenance-seed
 ```
 
-The local `-Seed` wrapper configures these through hidden prompts. Hosting uses
-`dotnet BookShare.API.dll` with the same maintenance argument. Commands do not
-start HTTP and return nonzero on failure with no provider/secret detail. Remove
-seed settings after provisioning. Never put seed in an automatic startup command.
+Both require Maintenance__Database to match the configured target exactly. Seed
+also requires DemoSeed__Enabled=true and four distinct 16-128 character passwords:
+DemoSeed__AdminPassword, DemoSeed__OwnerPassword, DemoSeed__Borrower1Password,
+DemoSeed__Borrower2Password. Start-Local -Seed supplies these via hidden prompts.
+Commands start no HTTP, return nonzero on failure and print fixed diagnostic
+codes without provider details. Remove maintenance/seed settings after use.
 
-| Demo role | Login email |
+Seed is atomic, additive and serializes concurrent seed processes. It preserves
+hashes, edits, state, Versions and history, and rejects identity/role collisions.
+It creates four categories, 12 ads and multi-category links. The race book is
+ספר הדגמת תחרות. Demo accounts:
+
+| Role | Email |
 |---|---|
 | Admin | admin@demo.bookshare.example |
 | Owner | owner@demo.bookshare.example |
 | Borrower 1 | borrower1@demo.bookshare.example |
 | Borrower 2 | borrower2@demo.bookshare.example |
 
-These reserved `.example` addresses and phone 0500000000 are fictional; there is
-no mail/SMS service. Seed creates four categories, twelve Available owner ads and
-18 category links. The first ad is `ספר הדגמת תחרות`, ID
-`b0090000-0000-4000-8000-000000000100`. All ads represent one physical copy each.
+These addresses/phones are fictional. Give the examiner valid passwords privately
+for the actual environment being examined. Preview credentials change on each
+fresh launch and differ from cloud credentials. Never put real passwords here.
 
-Seed uses stable demo IDs, normalized email/category lookups, a database advisory
-transaction lock and one atomic commit. Existing demo hashes, roles, book status,
-Version, edits, category links and loan history are never overwritten. An email/ID
-or role collision fails; it never elevates a previously registered Member. Repeats
-add only missing fixture records; they do not reset a used race book to Available.
-Return the active loan normally before repeating the demo. Supplying new secrets
-on a repeat does not rotate existing passwords. Seed requires migrations first.
-A previously deleted fixture may be recreated; seed is provisioning, not cleanup.
+## Limited resource and concurrency
 
-## Limited resource and race demonstration
+The scarce resource is one physical copy. Two borrowers read the same Available
+book and Version and reserve concurrently: one gets 200, the other 409. One holder
+is saved; no loan begins until actual handover. Book.Version is an EF concurrency
+token refreshed in DbContext SaveChanges. A transaction starts BEFORE loading and
+checking the book. UnitOfWork rolls back DbUpdateConcurrencyException and maps it
+to 409. A partial unique index additionally prevents two active loans per book.
 
-The limited resource is the single physical book represented by an ad. Contact
-access does not reserve it. Owner and Admin open the same available race book in
-separate browser profiles and prepare deliveries to the two different borrowers.
-Submit concurrently: one delivery succeeds (201), the other gets 409. One active
-loan remains. The owner confirms return, making the book Available again; duplicate
-return gets 409. Returned history prevents deletion but permits hiding.
+Demonstrate in independent browser profiles. Holder/owner/Admin can release a
+reservation using current Version. No expiry or waiting list. Owner/Admin can
+read requester name/email/phone through GET /api/books/{id}/reservation/contact;
+this response is no-store and versioned, and the UI requires matching requester
+details before handover. Public DTOs do not expose requester identity.
 
-Book.Version is an optimistic concurrency token changed on every book update.
-Delivery and return each begin a transaction before the tracked read and commit
-book status plus loan changes atomically. A unique partial index on active
-Loan.BookId provides another guard. Only the specific concurrency/index/history
-failures map to 409; other database failures remain errors. Stale edit Version is
-also rejected. No automatic mutation/delivery/return retry exists.
+The owner confirms delivery to the holder and later return. Stale cancellation
+and handover, duplicate return and editing/hiding/deleting reserved or loaned
+books are rejected. History prevents deletion after return. Legacy owner/Admin
+manual delivery by email remains supported for unreserved available books only;
+it cannot override a reservation. Loans UI separately lists pending reservations
+using authenticated GET /api/books?reservedByMe=true, paged in SQL and restricted
+to the caller even for Admin. It cannot be combined with mine.
 
-## Tests (isolated database only)
+## Tests
+
+From the server root:
 
 ```powershell
 dotnet build BookShare.slnx --no-restore -p:BaseOutputPath=bin/Stage7/
@@ -172,114 +160,39 @@ dotnet run --project tests/BookShare.IntegrationTests --no-restore -p:BaseOutput
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Test-PostgreSql.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Test-PostgreSql.ps1 -Seed
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Test-PostgreSql.ps1 -Client
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Test-Hosting.ps1
 ```
 
-10 xUnit/Moq cases test service decisions; the executable harness runs 165 offline /
-HTTP checks. Real PostgreSQL checks independently verify Version, synchronized
-owner/Admin delivery and return races, real SQL rollback, constraints, authorization
-and pagination. Seed checks cover empty-database migrations, disabled/missing
-secrets, hashes, counts, repeated/concurrent seeds, preservation and role collisions.
-Client mode runs Chrome against actual API services/repositories/PostgreSQL and
-checks final persisted state. Install client dependencies first with `npm.cmd ci`.
+Each PG launcher creates a NEW empty temporary cluster and stops it in finally.
+Only bookshare_test_ database names are allowed. Add -BaseOutputPath bin/ReviewFix/
+to isolate builds from a running preview. Chrome workflow needs port 5173 free.
+No Microsoft.AspNetCore.Mvc.Testing or new external test packages are installed.
 
-Each PowerShell run initializes a new temporary cluster on loopback and a free
-port, with a random password; no application service/database is contacted. It
-stops the cluster in finally and retains artifacts under the printed Temp path.
-Use `-PostgresBin` for an alternative installation. Abrupt termination can bypass
-finally: stop only that cluster with `pg_ctl -D <printed-path>/data -m fast -w stop`.
-Direct harness `--postgres` / `--seed` / `--client` requires a genuinely separate,
-empty database named `bookshare_test_[a-z0-9_]+`; it refuses populated/other names.
-Never rename the application database to bypass this check. No drops/truncation.
+There are 15 xUnit/Moq service tests. The default executable harness uses doubles;
+explicit PG mode proves independent two-DbContext Version conflict, coordinated
+borrower reservation and delivery/return races, SQL rollback, constraints and
+permissions. Review regression checks verify thrown business error log status,
+409 Warning, no-tracking reads, persisted password rehash and category updates.
+Client build and six Chrome contract tests are documented in its README. Do not
+mistake default offline harness passes for real PostgreSQL verification.
 
-## API, errors and licensing
+## API, logs and release status
 
-Routes: `/api/users`, `/api/auth/tokens`, `/api/users/me`, `/api/books`,
-`/api/books/{id}/contact`, `/api/categories`, `/api/loans`,
-`/api/loans/{id}/return`. Swagger documents request/response contracts. Catalog
-supports search/category/city/availability/mine, title/date sorting and paging
-(default 10, max 50). Loan lists respect owner/borrower/admin visibility.
+Resources under /api: users, auth/tokens, books, books/{id}/reservation, categories,
+loans and loans/{id}/return. Swagger: http://localhost:5213/swagger in Development
+only. It is disabled in Production, including the production-mode preview.
+Health: /api/health and /api/health/database (200/503). Errors contain status, code,
+message, correlationId and optional validation errors. NLog records actual request
+status, business conflicts at Warning and unexpected exceptions at Error; no
+request bodies, JWTs or provider messages. Production files are ephemeral.
 
-Errors have status, code, message, correlationId (validation also errors).
-NLog writes request Information, conflict Warning, exception Error; no bodies,
-query strings, tokens or provider exception messages. Production files are ephemeral;
-retain console logs through the host if necessary. CORS is before authentication.
+Separate GitHub repositories and Free Render API/static-client/PostgreSQL exist.
+The deployed code still predates reservation changes: migration 3, coordinated
+release and full deployed acceptance remain pending. NetFree previously blocked
+public acceptance. Server auto-deploy was found enabled during review fixes;
+do not push until cloud schema is ready or auto-deploy is disabled. See
+DEPLOYMENT.md for exact targets, TLS/IP rules and Free limits/expiry (2026-11-18).
+No paid upgrades are authorized. Stage 9 is incomplete until deployed acceptance.
 
-Existing package licenses: EF Core, JWT, Swagger, DI and cryptography pins MIT;
-Npgsql PostgreSQL license; NLog BSD-3-Clause; xUnit/runner Apache-2.0; Moq BSD-3-Clause;
-Test SDK MIT. No Microsoft.AspNetCore.Mvc.Testing was installed. AutoMapper 16.1.1
-is RPL 1.5 or an alternative Lucky Penny license, not MIT: review applicable terms
-before publication and set `AUTOMAPPER_LICENSE_KEY` privately if applicable.
-[AutoMapper license](https://github.com/LuckyPennySoftware/AutoMapper/blob/v16.1.1/LICENSE.md),
-[configuration](https://docs.automapper.io/en/stable/License-configuration.html).
-The Docker images are official .NET 10 SDK/runtime images; no additional packages.
-Docker build and deployed acceptance must be explicitly recorded, not inferred
-from a successful local dotnet build.
-
-## Stage 9 verification record — 2026-10-19
-
-Passed in this workspace:
-
-- The documented Stage7 solution build: zero warnings/errors; 10 xUnit/Moq tests
-  and all 165 executable harness checks passed.
-- `npm.cmd ci`, `npm.cmd run build`, `npm.cmd test -- --project=contracts`:
-  client build and all four Chrome contract tests passed.
-- `Test-PostgreSql.ps1`: original actual PostgreSQL concurrency/rollback/constraint
-  suite passed in a new isolated cluster.
-- `Test-PostgreSql.ps1 -Seed`: actual API maintenance CLI refused wrong target,
-  applied both migrations from empty database and repeated migration successfully.
-  Four accounts, valid hashes, 12 ads, 4 categories, 18 links and an Available race
-  book verified. Repeated/concurrent seed and CLI seed preserved credentials,
-  edited title, Hidden state and Version; role collision rejected. Secret values
-  were checked absent from child stdout/stderr. All seed checks passed.
-- `Test-PostgreSql.ps1 -Client`: full real API/PostgreSQL Chrome workflow and final
-  persisted-state checks passed. Each database run used a separate temporary
-  PostgreSQL 18.6 cluster; all clusters were stopped afterward.
-- `Test-Hosting.ps1`: actual production Program entry point passed exact-origin
-  preflight, unrelated-origin rejection, protected 401 with CORS, disabled Swagger
-  and TLS-edge HTTP hosting checks. It used an unreachable dummy connection and
-  never queried a database.
-- `dotnet publish src/BookShare.API/BookShare.API.csproj --no-restore -c Release
-  -o bin/Stage9/publish` passed, producing a local release artifact.
-- PowerShell parser validation of the updated local launcher passed. Its
-  interactive maintenance prompts were not run against the application database.
-
-Initial sandbox attempts blocked initdb/esbuild; reported final database/browser
-runs used authorized execution and passed. No package was added. Docker build and
-container verification were completed after Docker Desktop was started; see below.
-Render settings were reviewed against current official docs;
-no Render-side blueprint validation, resource creation, billing or deployment was
-performed. No remote repository publishing or commits were performed. Existing
-untracked files were preserved. The application database was never modified.
-
-Next required work: review and approval of the actual Render account/plans/costs and repository publication,
-controlled deployment/migrations/seed, then the complete deployed acceptance in
-DEPLOYMENT.md. Stage 9 is not complete until that deployed workflow passes.
-
-### Docker verification follow-up
-
-`docker build --tag bookshare-api:stage9 .` passed using the complete updated
-Dockerfile, with .NET SDK 10.0.402 inside Linux. The runtime uses the non-root `app`
-user. The Dockerfile explicitly creates `/app/logs` and gives `app` ownership so
-NLog's file target can write there.
-
-```powershell
-docker build --tag bookshare-api:stage9 .
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/Test-Hosting.ps1 -Docker
-```
-
-The Docker smoke test passed on the final image: HTTP on port 10000 (published only
-to loopback on a temporary host port), non-root UID, writable log directory,
-allowed-origin preflight, rejection of unrelated origins, protected 401 with CORS,
-and disabled production Swagger. It uses a dummy unreachable database connection,
-a fresh signing key passed by environment variable name rather than command-line
-value, and stops/removes its temporary container in finally. It never accesses
-the application database. The ordinary non-Docker hosting smoke test also passed.
-
-Initial image downloads were slow; an intermediate rebuild failed with Docker DNS /
-NuGet transport errors. An offline runtime-layer check passed, and after DNS
-recovered the complete source Dockerfile rebuild and final smoke test passed.
-Docker reports missing Git commit metadata because repository files remain
-untracked; no commit, image push or deployment was performed. The locally built
-image remains available as `bookshare-api:stage9`. These are local container checks,
-not Render acceptance or a full database/browser workflow inside the container.
+Existing licenses are in package LICENSE files. AutoMapper 16.1.1 is RPL 1.5 or an
+alternative Lucky Penny license; review applicable terms and supply a private
+AUTOMAPPER_LICENSE_KEY if required. No new package was added for review fixes.

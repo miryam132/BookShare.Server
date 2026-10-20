@@ -28,7 +28,7 @@ public sealed class AuthService(IUserRepository users, IUnitOfWork unitOfWork,
 
     public async Task<TokenResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
-        var user = await users.FindByNormalizedEmailAsync(request.Email.Trim().ToUpperInvariant(), cancellationToken);
+        var user = await users.FindByNormalizedEmailAsync(request.Email.Trim().ToUpperInvariant(), cancellationToken, tracking: true);
         if (user is null || !passwords.Verify(user, request.Password, out var rehash))
             throw new AppException(401, "invalid_credentials", "Email or password is incorrect.");
         if (rehash)

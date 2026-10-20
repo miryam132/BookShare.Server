@@ -138,7 +138,7 @@ public sealed class MemoryCategories(IBookRepository books) : ICategoryRepositor
     public void Add(Category category) => items.Add(category);
     public void Remove(Category category) => items.Remove(category);
     public Task<IReadOnlyList<Category>> ListAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Category>>(items.ToList());
-    public Task<Category?> FindByIdAsync(Guid id, CancellationToken ct) => Task.FromResult(items.SingleOrDefault(x => x.Id == id));
+    public Task<Category?> FindByIdAsync(Guid id, CancellationToken ct, bool tracking = false) => Task.FromResult(items.SingleOrDefault(x => x.Id == id));
     public Task<Category?> FindByNormalizedNameAsync(string name, CancellationToken ct) => Task.FromResult(items.SingleOrDefault(x => x.NormalizedName == name));
     public Task<IReadOnlyList<Category>> FindByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) => Task.FromResult<IReadOnlyList<Category>>(items.Where(x => ids.Contains(x.Id)).ToList());
     public Task<bool> IsAssignedAsync(Guid id, CancellationToken ct) => Task.FromResult(((MemoryBooks)books).Items.Any(x => x.BookCategories.Any(c => c.CategoryId == id)));

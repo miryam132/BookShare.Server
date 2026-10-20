@@ -46,10 +46,16 @@ public static class PostgreSqlChecks
         await using (var db = Open()) await db.Database.MigrateAsync(ct);
         var owner = User("owner"); var admin = User("admin"); admin.Role = UserRole.Admin;
         var reader1 = User("reader1"); var reader2 = User("reader2");
+        var rehashUser = User("rehash");
+        var rehashPassword = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+        var oldHasher = new Microsoft.AspNetCore.Identity.PasswordHasher<User>(Microsoft.Extensions.Options.Options.Create(
+            new Microsoft.AspNetCore.Identity.PasswordHasherOptions { IterationCount = 1000 }));
+        rehashUser.PasswordHash = oldHasher.HashPassword(rehashUser, rehashPassword);
+        var oldHash = rehashUser.PasswordHash;
         var book = Book(owner); var rollbackBook = Book(owner);
         await using (var db = Open())
         {
-            db.AddRange(owner, admin, reader1, reader2, book, rollbackBook);
+            db.AddRange(owner, admin, reader1, reader2, rehashUser, book, rollbackBook);
             for (var i = 0; i < 12; i++) db.Add(Book(owner));
             await db.SaveChangesAsync(ct);
         }
@@ -82,6 +88,38 @@ public static class PostgreSqlChecks
         app.Urls.Add("http://127.0.0.1:0"); await app.StartAsync(ct);
         try
         {
+            Console.WriteLine("CHECK: read-only tracking, password rehash persistence and category update tracking");
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<BookShareDbContext>();
+                var repository = scope.ServiceProvider.GetRequiredService<IUserRepository>();
+                await repository.FindByIdAsync(owner.Id, ct);
+                await repository.FindByNormalizedEmailAsync(owner.NormalizedEmail, ct);
+                Require(!db.ChangeTracker.Entries<User>().Any());
+                await scope.ServiceProvider.GetRequiredService<IAuthService>().LoginAsync(
+                    new LoginRequest { Email = rehashUser.Email, Password = rehashPassword }, ct);
+            }
+            await using (var db = Open())
+            {
+                var saved = await db.Users.AsNoTracking().SingleAsync(x => x.Id == rehashUser.Id, ct);
+                Require(saved.PasswordHash != oldHash);
+                Require(new BookShare.Infrastructure.Security.PasswordSecurity().Verify(saved, rehashPassword, out var needsRehash) && !needsRehash);
+                var trackingCategory = new Category { Name = "Tracking", NormalizedName = "TRACKING" };
+                db.Add(trackingCategory); await db.SaveChangesAsync(ct);
+            }
+            Guid categoryId;
+            await using (var db = Open()) categoryId = (await db.Categories.AsNoTracking().SingleAsync(ct)).Id;
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<BookShareDbContext>();
+                var categories = scope.ServiceProvider.GetRequiredService<ICategoryRepository>();
+                await categories.FindByIdAsync(categoryId, ct);
+                await categories.FindByNormalizedNameAsync("TRACKING", ct);
+                Require(!db.ChangeTracker.Entries<Category>().Any());
+                await scope.ServiceProvider.GetRequiredService<ICategoryService>().UpdateAsync(categoryId,
+                    new CategoryRequest { Name = "Tracking updated" }, new Actor(admin.Id, true), ct);
+            }
+            await using (var db = Open()) Require((await db.Categories.AsNoTracking().SingleAsync(ct)).Name == "Tracking updated");
             using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()), Timeout = TimeSpan.FromSeconds(40) };
             async Task<HttpResponseMessage> Send(HttpMethod method, string path, User? actor, object? body = null)
             {

@@ -123,7 +123,7 @@ public sealed class MemoryUsers : IUserRepository
     private readonly List<User> users = [];
     public void Add(User user) => users.Add(user);
     public Task<User?> FindByIdAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(users.SingleOrDefault(x => x.Id == id));
-    public Task<User?> FindByNormalizedEmailAsync(string email, CancellationToken cancellationToken) => Task.FromResult(users.SingleOrDefault(x => x.NormalizedEmail == email));
+    public Task<User?> FindByNormalizedEmailAsync(string email, CancellationToken cancellationToken, bool tracking = false) => Task.FromResult(users.SingleOrDefault(x => x.NormalizedEmail == email));
 }
 
 public sealed class MemoryUnit(IBookRepository books) : IUnitOfWork

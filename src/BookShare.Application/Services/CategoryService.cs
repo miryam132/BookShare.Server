@@ -9,7 +9,7 @@ public sealed class CategoryService(ICategoryRepository categories, IUnitOfWork 
     {
         if (!actor.IsAdmin) throw new AppException(403, "forbidden", "Only an administrator can manage categories.");
     }
-    private async Task<Category> Load(Guid id, CancellationToken ct) => await categories.FindByIdAsync(id, ct)
+    private async Task<Category> Load(Guid id, CancellationToken ct, bool tracking = false) => await categories.FindByIdAsync(id, ct, tracking)
         ?? throw new AppException(404, "category_not_found", "Category was not found.");
     private async Task Apply(Category category, CategoryRequest request, CancellationToken ct)
     {
@@ -29,12 +29,12 @@ public sealed class CategoryService(ICategoryRepository categories, IUnitOfWork 
     }
     public async Task<CategoryResponse> UpdateAsync(Guid id, CategoryRequest request, Actor actor, CancellationToken ct)
     {
-        Admin(actor); var category = await Load(id, ct); await Apply(category, request, ct);
+        Admin(actor); var category = await Load(id, ct, tracking: true); await Apply(category, request, ct);
         await unit.SaveChangesAsync(ct); return mapper.Map<CategoryResponse>(category);
     }
     public async Task DeleteAsync(Guid id, Actor actor, CancellationToken ct)
     {
-        Admin(actor); var category = await Load(id, ct);
+        Admin(actor); var category = await Load(id, ct, tracking: true);
         if (await categories.IsAssignedAsync(id, ct)) throw new AppException(409, "category_assigned", "Remove category assignments first.");
         categories.Remove(category); await unit.SaveChangesAsync(ct);
     }

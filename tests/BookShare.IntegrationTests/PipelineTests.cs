@@ -153,6 +153,7 @@ Console.WriteLine($"Passed {checks} infrastructure and HTTP checks. No database 
 await AuthChecks.RunAsync();
 await LoanInfrastructureChecks.RunAsync();
 await LoanTransactionChecks.RunAsync();
+await LoggingChecks.RunAsync();
 
 [ApiController]
 [Route("_test/pipeline")]

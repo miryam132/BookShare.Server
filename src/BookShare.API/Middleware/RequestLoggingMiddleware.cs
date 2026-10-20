@@ -20,6 +20,13 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
         });
         var timer = Stopwatch.StartNew();
         try { await next(context); }
+        catch (BookShare.Application.Services.AppException exception)
+        {
+            // The outer error handler will serialize this same status. Record it
+            // before logging, rather than temporarily misclassifying it as 500.
+            if (!context.Response.HasStarted) context.Response.StatusCode = exception.Status;
+            throw;
+        }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             if (!context.Response.HasStarted) context.Response.StatusCode = 499;
